@@ -58,14 +58,18 @@ class AuthController:
             if existing:
                 return False, f"Username '{username}' sudah terdaftar. Gunakan username lain."
 
-            new_user = User(
-                username=username,
-                password_hash=hash_password(password),
-                nama_lengkap=nama_lengkap,
-            )
+            new_user = User()
+            # Validasi data dieksekusi di dalam setter User
+            new_user.set_username(username)
+            new_user.set_nama_lengkap(nama_lengkap)
+            new_user.set_password_hash(hash_password(password))
+
             session.add(new_user)
             session.commit()
             return True, "Pendaftaran berhasil! Silakan masuk dengan akun Anda."
+        except ValueError as ve:
+            session.rollback()
+            return False, str(ve)
         except Exception as e:
             session.rollback()
             return False, f"Terjadi kesalahan saat pendaftaran: {str(e)}"
@@ -82,7 +86,7 @@ class AuthController:
         session = get_session()
         try:
             user = session.query(User).filter(User.username == username).first()
-            if not user or not verify_password(password, user.password_hash):
+            if not user or not verify_password(password, user.get_password_hash()):
                 return False, "Username atau password salah.", None
             return True, "Login berhasil!", user
         finally:
@@ -104,8 +108,8 @@ class AuthController:
         st.session_state["authenticated"] = True
         st.session_state["user"] = {
             "id": user.id,
-            "username": user.username,
-            "nama_lengkap": user.nama_lengkap,
+            "username": user.get_username(),
+            "nama_lengkap": user.get_nama_lengkap(),
         }
 
     @staticmethod
@@ -133,11 +137,10 @@ def seed_default_user():
     session = get_session()
     try:
         if session.query(User).count() == 0:
-            admin_user = User(
-                username="admin",
-                password_hash=hash_password("admin123"),
-                nama_lengkap="Administrator",
-            )
+            admin_user = User()
+            admin_user.set_username("admin")
+            admin_user.set_nama_lengkap("Administrator")
+            admin_user.set_password_hash(hash_password("admin123"))
             session.add(admin_user)
             session.commit()
     except Exception:

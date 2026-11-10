@@ -20,8 +20,8 @@ def tampilkan_halaman_pelanggan(controller: PelangganController):
             data = [
                 {
                     "ID": pel.id,
-                    "Nama Pelanggan": pel.nama,
-                    "Jumlah Riwayat Pesanan": len(pel.pesanan_list),
+                    "Nama Pelanggan": pel.get_nama(),
+                    "Jumlah Riwayat Pesanan": len(pel.get_pesanan_list()),
                 }
                 for pel in semua_pelanggan
             ]
@@ -31,14 +31,25 @@ def tampilkan_halaman_pelanggan(controller: PelangganController):
 
     with tab_tambah:
         st.subheader("Tambah Pelanggan Baru")
-        with st.form("form_tambah_pelanggan", clear_on_submit=True):
+        with st.form("form_tambah_pelanggan", clear_on_submit=False):
             nama_pel = st.text_input("Nama Lengkap Pelanggan *", placeholder="Contoh: Budi Santoso")
+            # Peringatan error tepat di bawah textbox
+            err_nama = st.empty()
+
             submit = st.form_submit_button("Simpan Pelanggan", type="primary")
 
             if submit:
-                try:
-                    controller.tambah_pelanggan(nama_pel)
-                    st.success(f"Pelanggan '{nama_pel}' berhasil ditambahkan!")
-                    st.rerun()
-                except Exception as err:
-                    st.error(f"Gagal: {err}")
+                nama_clean = (nama_pel or "").strip()
+                if not nama_clean or len(nama_clean) < 2:
+                    err_nama.error("⚠️ Data input salah: Nama pelanggan wajib diisi (minimal 2 karakter).")
+                elif len(nama_clean) > 100:
+                    err_nama.error("⚠️ Data input salah: Nama pelanggan maksimal 100 karakter.")
+                else:
+                    try:
+                        controller.tambah_pelanggan(nama_clean)
+                        st.success(f"Pelanggan '{nama_clean}' berhasil ditambahkan!")
+                        st.rerun()
+                    except ValueError as err:
+                        err_nama.error(f"⚠️ Data input tidak sesuai: {str(err)}")
+                    except Exception as err:
+                        st.error(f"Gagal menambahkan pelanggan: {err}")

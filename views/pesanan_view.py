@@ -24,20 +24,22 @@ def tampilkan_halaman_pesanan(
         st.subheader("Daftar Transaksi Pesanan")
         if semua_pesanan:
             for pes in semua_pesanan:
+                pel_nama = pes.pelanggan.get_nama() if pes.pelanggan else "Umum"
                 with st.expander(
-                    f"📦 No. Pesanan: **{pes.nomor}** | Pelanggan: **{pes.pelanggan.nama if pes.pelanggan else 'Umum'}** | Total: **Rp {pes.get_total_pesanan():,.2f}**"
+                    f"📦 No. Pesanan: **{pes.get_nomor()}** | Pelanggan: **{pel_nama}** | Total: **Rp {pes.get_total_pesanan():,.2f}**"
                 ):
-                    st.caption(f"Waktu Transaksi: {pes.tanggal.strftime('%Y-%m-%d %H:%M:%S')}")
+                    st.caption(f"Waktu Transaksi: {pes.get_tanggal().strftime('%Y-%m-%d %H:%M:%S')}")
                     st.write("#### Rincian Item (Composition: `DetailPesanan`):")
 
                     data_detail = []
-                    for idx, d in enumerate(pes.detail, start=1):
+                    for idx, d in enumerate(pes.get_detail(), start=1):
+                        prod = d.get_produk()
                         data_detail.append(
                             {
                                 "No": idx,
-                                "Nama Produk": d.produk.nama if d.produk else "-",
-                                "Harga Satuan": f"Rp {d.produk.harga:,.2f}" if d.produk else "-",
-                                "Jumlah (Qty)": d.jumlah,
+                                "Nama Produk": prod.get_nama() if prod else "-",
+                                "Harga Satuan": f"Rp {prod.get_harga():,.2f}" if prod else "-",
+                                "Jumlah (Qty)": d.get_jumlah(),
                                 "Subtotal (`get_total()`)": f"Rp {d.get_total():,.2f}",
                             }
                         )
@@ -61,14 +63,18 @@ def tampilkan_halaman_pesanan(
 
         nomor_pesanan_auto = pesanan_ctrl.generate_nomor_pesanan()
 
-        nomor_pesanan = st.text_input("Nomor Pesanan", value=nomor_pesanan_auto)
+        nomor_pesanan = st.text_input("Nomor Pesanan *", value=nomor_pesanan_auto)
+        # Peringatan error tepat di bawah textbox Nomor Pesanan
+        err_nomor = st.empty()
 
-        opsi_pel = {f"#{p.id} - {p.nama}": p.id for p in semua_pelanggan}
+        opsi_pel = {f"#{p.id} - {p.get_nama()}": p.id for p in semua_pelanggan}
         pel_terpilih = st.selectbox(
-            "Pilih Pelanggan:",
+            "Pilih Pelanggan *",
             options=list(opsi_pel.keys()) if opsi_pel else ["(Tidak ada pelanggan)"],
         )
         pelanggan_id = opsi_pel.get(pel_terpilih) if opsi_pel else None
+        # Peringatan error tepat di bawah selectbox Pelanggan
+        err_pelanggan = st.empty()
 
         st.write("---")
         st.markdown("#### Pilih Produk & Jumlah Pembelian")
@@ -77,7 +83,9 @@ def tampilkan_halaman_pesanan(
             st.session_state["cart_items"] = []
 
         opsi_prod = {
-            f"{p.nama} (Stok: {p.stok}, Rp {p.harga:,.0f})": p for p in semua_produk if p.stok > 0
+            f"{p.get_nama()} (Stok: {p.get_stok()}, Rp {p.get_harga():,.0f})": p
+            for p in semua_produk
+            if p.get_stok() > 0
         }
 
         if opsi_prod:
@@ -87,24 +95,52 @@ def tampilkan_halaman_pesanan(
                 prod_obj = opsi_prod[prod_label]
             with col_q:
                 qty = st.number_input(
-                    "Jumlah",
+                    "Jumlah *",
                     min_value=1,
-                    max_value=max(1, prod_obj.stok),
                     value=1,
                     step=1,
                 )
             with col_btn:
-                if st.button("➕ Tambah ke Item"):
-                    st.session_state["cart_items"].append(
-                        {
-                            "produk_id": prod_obj.id,
-                            "nama": prod_obj.nama,
-                            "harga": prod_obj.harga,
-                            "jumlah": qty,
-                            "subtotal": prod_obj.harga * qty,
-                        }
+                btn_tambah_item = st.button("➕ Tambah ke Item")
+
+            # Peringatan error tepat di bawah input Jumlah / Pilihan Produk
+            err_qty = st.empty()
+
+            if btn_tambah_item:
+                if qty <= 0:
+                    err_qty.error("⚠️ Data input salah: Jumlah pembelian minimal 1 item.")
+                elif qty > prod_obj.get_stok():
+                    err_qty.error(
+                        f"⚠️ Data input salah: Jumlah ({qty}) melebihi stok yang tersedia ({prod_obj.get_stok()} unit)."
                     )
-                    st.rerun()
+                else:
+                    # Cek apakah item sudah ada di cart
+                    ada_di_cart = False
+                    for item in st.session_state["cart_items"]:
+                        if item["produk_id"] == prod_obj.id:
+                            total_qty = item["jumlah"] + qty
+                            if total_qty > prod_obj.get_stok():
+                                err_qty.error(
+                                    f"⚠️ Data input salah: Total jumlah di keranjang ({total_qty}) melebihi stok ({prod_obj.get_stok()})."
+                                )
+                                ada_di_cart = True
+                                break
+                            item["jumlah"] = total_qty
+                            item["subtotal"] = prod_obj.get_harga() * total_qty
+                            ada_di_cart = True
+                            st.rerun()
+
+                    if not ada_di_cart:
+                        st.session_state["cart_items"].append(
+                            {
+                                "produk_id": prod_obj.id,
+                                "nama": prod_obj.get_nama(),
+                                "harga": prod_obj.get_harga(),
+                                "jumlah": qty,
+                                "subtotal": prod_obj.get_harga() * qty,
+                            }
+                        )
+                        st.rerun()
 
             if st.session_state["cart_items"]:
                 st.write("##### Daftar Produk dalam Pesanan:")
@@ -116,24 +152,47 @@ def tampilkan_halaman_pesanan(
                 total_belanja = sum(i["subtotal"] for i in st.session_state["cart_items"])
                 st.markdown(f"#### Total Estimasi: **Rp {total_belanja:,.2f}**")
 
+                err_cart = st.empty()
+
                 col_sv, col_rst = st.columns([1, 4])
                 with col_sv:
                     if st.button("💾 Proses & Simpan Pesanan", type="primary"):
-                        try:
-                            items_payload = [
-                                {"produk_id": i["produk_id"], "jumlah": i["jumlah"]}
-                                for i in st.session_state["cart_items"]
-                            ]
-                            pesanan_ctrl.buat_pesanan(
-                                nomor=nomor_pesanan,
-                                pelanggan_id=pelanggan_id,
-                                list_item=items_payload,
-                            )
-                            st.session_state["cart_items"] = []
-                            st.success(f"Pesanan '{nomor_pesanan}' berhasil dibuat!")
-                            st.rerun()
-                        except Exception as err:
-                            st.error(f"Gagal memproses pesanan: {err}")
+                        ada_err_order = False
+
+                        # Validasi nomor pesanan
+                        nomor_clean = (nomor_pesanan or "").strip()
+                        if not nomor_clean or len(nomor_clean) < 3:
+                            err_nomor.error("⚠️ Data input salah: Nomor pesanan wajib diisi (minimal 3 karakter).")
+                            ada_err_order = True
+
+                        # Validasi pelanggan
+                        if not pelanggan_id:
+                            err_pelanggan.error("⚠️ Data input salah: Silakan pilih pelanggan yang terdaftar.")
+                            ada_err_order = True
+
+                        # Validasi item
+                        if not st.session_state["cart_items"]:
+                            err_cart.error("⚠️ Data input salah: Pesanan minimal harus memiliki 1 item produk.")
+                            ada_err_order = True
+
+                        if not ada_err_order:
+                            try:
+                                items_payload = [
+                                    {"produk_id": i["produk_id"], "jumlah": i["jumlah"]}
+                                    for i in st.session_state["cart_items"]
+                                ]
+                                pesanan_ctrl.buat_pesanan(
+                                    nomor=nomor_clean,
+                                    pelanggan_id=pelanggan_id,
+                                    list_item=items_payload,
+                                )
+                                st.session_state["cart_items"] = []
+                                st.success(f"Pesanan '{nomor_clean}' berhasil dibuat!")
+                                st.rerun()
+                            except ValueError as err:
+                                err_cart.error(f"⚠️ Data input tidak sesuai: {err}")
+                            except Exception as err:
+                                err_cart.error(f"Gagal memproses pesanan: {err}")
                 with col_rst:
                     if st.button("Kosongkan Keranjang"):
                         st.session_state["cart_items"] = []

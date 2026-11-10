@@ -19,16 +19,17 @@ def tampilkan_halaman_kategori(controller: KategoriController):
         if semua_kat:
             data = []
             for k in semua_kat:
-                jml_produk = len(k.daftar_produk)
+                prods = k.get_daftar_produk()
+                jml_produk = len(prods)
                 daftar_nama_produk = (
-                    ", ".join([p.nama for p in k.daftar_produk])
+                    ", ".join([p.get_nama() for p in prods])
                     if jml_produk > 0
                     else "(Belum ada produk)"
                 )
                 data.append(
                     {
                         "ID": k.id,
-                        "Nama Kategori": k.nama,
+                        "Nama Kategori": k.get_nama(),
                         "Jumlah Produk": f"{jml_produk} produk",
                         "Daftar Produk (daftar_produk)": daftar_nama_produk,
                     }
@@ -38,7 +39,7 @@ def tampilkan_halaman_kategori(controller: KategoriController):
 
             st.write("---")
             st.subheader("🗑️ Hapus Kategori")
-            opsi_kat = {f"#{k.id} - {k.nama}": k.id for k in semua_kat}
+            opsi_kat = {f"#{k.id} - {k.get_nama()}": k.id for k in semua_kat}
             terpilih = st.selectbox("Pilih kategori yang ingin dihapus:", options=list(opsi_kat.keys()))
             if st.button("Hapus Kategori", type="secondary"):
                 try:
@@ -52,14 +53,25 @@ def tampilkan_halaman_kategori(controller: KategoriController):
 
     with tab_tambah:
         st.subheader("Tambah Kategori Baru")
-        with st.form("form_tambah_kategori", clear_on_submit=True):
+        with st.form("form_tambah_kategori", clear_on_submit=False):
             nama_baru = st.text_input("Nama Kategori *", placeholder="Contoh: Elektronik, Pakaian, Makanan...")
+            # Peringatan error tepat di bawah textbox
+            err_nama = st.empty()
+
             submit = st.form_submit_button("Simpan Kategori", type="primary")
 
             if submit:
-                try:
-                    controller.tambah_kategori(nama_baru)
-                    st.success(f"Kategori '{nama_baru}' berhasil ditambahkan!")
-                    st.rerun()
-                except Exception as err:
-                    st.error(f"Gagal: {err}")
+                nama_clean = (nama_baru or "").strip()
+                if not nama_clean or len(nama_clean) < 2:
+                    err_nama.error("⚠️ Data input salah: Nama kategori wajib diisi (minimal 2 karakter).")
+                elif len(nama_clean) > 100:
+                    err_nama.error("⚠️ Data input salah: Nama kategori maksimal 100 karakter.")
+                else:
+                    try:
+                        controller.tambah_kategori(nama_clean)
+                        st.success(f"Kategori '{nama_clean}' berhasil ditambahkan!")
+                        st.rerun()
+                    except ValueError as err:
+                        err_nama.error(f"⚠️ Data input tidak sesuai: {str(err)}")
+                    except Exception as err:
+                        st.error(f"Gagal menambahkan kategori: {err}")

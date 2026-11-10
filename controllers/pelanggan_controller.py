@@ -31,13 +31,12 @@ class PelangganController:
             session.close()
 
     def tambah_pelanggan(self, nama):
-        nama = (nama or "").strip()
-        if not nama:
-            raise ValueError("Nama pelanggan tidak boleh kosong.")
-
+        """Menambahkan pelanggan baru dengan validasi data melalui setter model."""
         session = get_session()
         try:
-            pel = Pelanggan(nama=nama)
+            pel = Pelanggan()
+            pel.set_nama(nama)  # Validasi nama pelanggan dieksekusi di setter
+
             session.add(pel)
             session.commit()
             return pel.id

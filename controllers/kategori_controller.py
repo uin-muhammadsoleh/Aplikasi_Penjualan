@@ -31,16 +31,16 @@ class KategoriController:
             session.close()
 
     def tambah_kategori(self, nama):
-        nama = (nama or "").strip()
-        if not nama:
-            raise ValueError("Nama kategori tidak boleh kosong.")
-
+        """Menambahkan kategori baru dengan validasi data melalui setter model."""
         session = get_session()
         try:
-            existing = session.query(Kategori).filter(Kategori.nama == nama).first()
+            kat = Kategori()
+            kat.set_nama(nama)  # Validasi nama kategori dieksekusi di setter
+
+            existing = session.query(Kategori).filter(Kategori.nama == kat.get_nama()).first()
             if existing:
-                raise ValueError(f"Kategori '{nama}' sudah ada.")
-            kat = Kategori(nama=nama)
+                raise ValueError(f"Kategori '{kat.get_nama()}' sudah ada.")
+
             session.add(kat)
             session.commit()
             return kat.id
@@ -51,16 +51,13 @@ class KategoriController:
             session.close()
 
     def ubah_kategori(self, kategori_id, nama):
-        nama = (nama or "").strip()
-        if not nama:
-            raise ValueError("Nama kategori tidak boleh kosong.")
-
+        """Memperbarui nama kategori dengan validasi melalui setter model."""
         session = get_session()
         try:
             kat = session.query(Kategori).filter(Kategori.id == int(kategori_id)).first()
             if not kat:
                 raise ValueError("Kategori tidak ditemukan.")
-            kat.nama = nama
+            kat.set_nama(nama)
             session.commit()
             return True
         except Exception:

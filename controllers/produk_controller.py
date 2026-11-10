@@ -42,21 +42,16 @@ class ProdukController:
             session.close()
 
     def tambah_produk(self, nama, harga, stok, kategori_id=None):
-        nama = (nama or "").strip()
-        if not nama:
-            raise ValueError("Nama produk wajib diisi.")
-        if harga < 0 or stok < 0:
-            raise ValueError("Harga dan stok tidak boleh negatif.")
-
+        """Menambahkan produk baru menggunakan setter pada model Produk untuk validasi data."""
         session = get_session()
         try:
-            kat_id = int(kategori_id) if kategori_id else None
-            produk = Produk(
-                nama=nama,
-                harga=float(harga),
-                stok=int(stok),
-                kategori_id=kat_id,
-            )
+            produk = Produk()
+            # Validasi data secara otomatis dieksekusi di dalam method setter
+            produk.set_nama(nama)
+            produk.set_harga(harga)
+            produk.set_stok(stok)
+            produk.set_kategori_id(kategori_id)
+
             session.add(produk)
             session.commit()
             return produk.id
@@ -67,21 +62,19 @@ class ProdukController:
             session.close()
 
     def ubah_produk(self, produk_id, nama, harga, stok, kategori_id=None):
-        nama = (nama or "").strip()
-        if not nama:
-            raise ValueError("Nama produk wajib diisi.")
-        if harga < 0 or stok < 0:
-            raise ValueError("Harga dan stok tidak boleh negatif.")
-
+        """Memperbarui data produk menggunakan setter pada model Produk untuk validasi data."""
         session = get_session()
         try:
             produk = session.query(Produk).filter(Produk.id == int(produk_id)).first()
             if produk is None:
                 raise ValueError("Produk tidak ditemukan.")
-            produk.nama = nama
-            produk.harga = float(harga)
-            produk.stok = int(stok)
-            produk.kategori_id = int(kategori_id) if kategori_id else None
+
+            # Validasi data melalui setter
+            produk.set_nama(nama)
+            produk.set_harga(harga)
+            produk.set_stok(stok)
+            produk.set_kategori_id(kategori_id)
+
             session.commit()
             return True
         except Exception:

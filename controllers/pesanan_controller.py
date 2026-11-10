@@ -51,18 +51,18 @@ class PesananController:
             session.close()
 
     def buat_pesanan(self, nomor: str, pelanggan_id: int | None, list_item: list[dict]):
-        """Membuat pesanan baru menggunakan metode tambah_produk() dari class Pesanan.
+        """Membuat pesanan baru menggunakan metode setter & tambah_produk() dari class Pesanan.
         list_item: list of {'produk_id': int, 'jumlah': int}
         """
-        nomor = (nomor or "").strip()
-        if not nomor:
-            raise ValueError("Nomor pesanan wajib diisi.")
         if not list_item:
             raise ValueError("Pesanan minimal harus memiliki 1 item produk.")
 
         session = get_session()
         try:
-            pesanan = Pesanan(nomor=nomor, pelanggan_id=pelanggan_id)
+            pesanan = Pesanan()
+            pesanan.set_nomor(nomor)  # Validasi nomor pesanan lewat setter
+            pesanan.set_pelanggan_id(pelanggan_id)
+
             session.add(pesanan)
 
             for item in list_item:
@@ -74,15 +74,15 @@ class PesananController:
                 produk = session.query(Produk).filter(Produk.id == p_id).first()
                 if not produk:
                     raise ValueError(f"Produk dengan ID {p_id} tidak ditemukan.")
-                if produk.stok < qty:
+                if produk.get_stok() < qty:
                     raise ValueError(
-                        f"Stok produk '{produk.nama}' tidak mencukupi (sisa: {produk.stok}, diminta: {qty})."
+                        f"Stok produk '{produk.get_nama()}' tidak mencukupi (sisa: {produk.get_stok()}, diminta: {qty})."
                     )
 
-                # Panggil method tambah_produk() sesuai Class Diagram
+                # Panggil method tambah_produk() sesuai Class Diagram (membuat DetailPesanan dgn setter)
                 pesanan.tambah_produk(produk=produk, jumlah=qty)
-                # Kurangi stok produk
-                produk.stok -= qty
+                # Kurangi stok produk via setter
+                produk.set_stok(produk.get_stok() - qty)
 
             session.commit()
             return pesanan.id

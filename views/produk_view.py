@@ -26,8 +26,8 @@ def konfirmasi_hapus_dialog(produk_id: int, nama_produk: str, controller):
 
 
 def tampilkan_halaman_produk(controller):
-    """Menampilkan antarmuka manajemen produk dengan daftar tabel, tombol tambah di atas,
-    tombol edit & hapus di setiap baris, serta dialog modal untuk konfirmasi hapus.
+    """Menampilkan antarmuka manajemen produk dengan validasi input,
+    peringatan di bawah masing-masing textbox, serta integrasi getter/setter.
     """
     if "produk_mode" not in st.session_state:
         st.session_state["produk_mode"] = "daftar"
@@ -52,24 +52,27 @@ def tampilkan_halaman_produk(controller):
             st.rerun()
 
         st.title("➕ Tambah Produk Baru")
-        st.caption("Tambahkan produk baru dengan menentukan Kategori (Aggregation sesuai Class Diagram).")
+        st.caption("Tambahkan produk baru dengan validasi data dan relasi Kategori (Aggregation).")
 
         with st.form("form_tambah_produk", clear_on_submit=False):
             nama_produk = st.text_input(
                 "Nama Produk *",
                 placeholder="Contoh: Laptop ASUS ROG 15",
             )
+            # Peringatan error tepat di bawah textbox Nama Produk
+            err_nama = st.empty()
 
             # Pilihan Kategori (Relasi Aggregation)
             opsi_kat = {"-- Tanpa Kategori --": None}
             for k in daftar_kategori:
-                opsi_kat[f"📁 {k.nama}"] = k.id
+                opsi_kat[f"📁 {k.get_nama()}"] = k.id
 
             kat_terpilih = st.selectbox(
                 "Kategori Produk",
                 options=list(opsi_kat.keys()),
             )
             kategori_id = opsi_kat[kat_terpilih]
+            err_kategori = st.empty()
 
             col_harga, col_stok = st.columns(2)
             with col_harga:
@@ -79,6 +82,9 @@ def tampilkan_halaman_produk(controller):
                     step=1000.0,
                     format="%.2f",
                 )
+                # Peringatan error tepat di bawah textbox/input Harga
+                err_harga = st.empty()
+
             with col_stok:
                 stok_produk = st.number_input(
                     "Jumlah Stok *",
@@ -86,6 +92,8 @@ def tampilkan_halaman_produk(controller):
                     step=1,
                     value=0,
                 )
+                # Peringatan error tepat di bawah textbox/input Stok
+                err_stok = st.empty()
 
             st.write("")
             col_sub, _ = st.columns([1, 4])
@@ -93,23 +101,45 @@ def tampilkan_halaman_produk(controller):
                 submitted = st.form_submit_button("💾 Simpan Produk", type="primary")
 
             if submitted:
-                try:
-                    controller.tambah_produk(
-                        nama=nama_produk,
-                        harga=harga_produk,
-                        stok=stok_produk,
-                        kategori_id=kategori_id,
-                    )
-                    st.session_state["flash_message"] = {
-                        "type": "success",
-                        "text": f"Produk '{nama_produk}' berhasil ditambahkan!",
-                    }
-                    st.session_state["produk_mode"] = "daftar"
-                    st.rerun()
-                except ValueError as err:
-                    st.error(f"❌ {str(err)}")
-                except Exception as err:
-                    st.error(f"❌ Terjadi kesalahan: {str(err)}")
+                ada_error = False
+
+                # 1. Validasi Nama Produk
+                if not nama_produk or len(nama_produk.strip()) < 2:
+                    err_nama.error("⚠️ Data input salah: Nama produk wajib diisi (minimal 2 karakter).")
+                    ada_error = True
+                elif len(nama_produk.strip()) > 150:
+                    err_nama.error("⚠️ Data input salah: Nama produk maksimal 150 karakter.")
+                    ada_error = True
+
+                # 2. Validasi Harga Produk
+                if harga_produk is None or harga_produk < 0:
+                    err_harga.error("⚠️ Data input salah: Harga satuan tidak boleh negatif (minimal Rp 0).")
+                    ada_error = True
+
+                # 3. Validasi Stok Produk
+                if stok_produk is None or stok_produk < 0:
+                    err_stok.error("⚠️ Data input salah: Jumlah stok tidak boleh negatif (minimal 0).")
+                    ada_error = True
+
+                # Jika validasi lolos, simpan melalui Controller (yang memanggil Setter Model)
+                if not ada_error:
+                    try:
+                        controller.tambah_produk(
+                            nama=nama_produk,
+                            harga=harga_produk,
+                            stok=stok_produk,
+                            kategori_id=kategori_id,
+                        )
+                        st.session_state["flash_message"] = {
+                            "type": "success",
+                            "text": f"Produk '{nama_produk}' berhasil ditambahkan!",
+                        }
+                        st.session_state["produk_mode"] = "daftar"
+                        st.rerun()
+                    except ValueError as err:
+                        err_nama.error(f"⚠️ Data input tidak sesuai: {str(err)}")
+                    except Exception as err:
+                        st.error(f"❌ Terjadi kesalahan saat menyimpan: {str(err)}")
 
     # ==============================================================
     # 2. HALAMAN EDIT PRODUK
@@ -130,18 +160,20 @@ def tampilkan_halaman_produk(controller):
                 st.rerun()
             return
 
-        st.title(f"✏️ Edit Data Produk: {produk.nama}")
+        st.title(f"✏️ Edit Data Produk: {produk.get_nama()}")
         st.info(f"ℹ️ **Informasi Produk (`get_info()`):** {produk.get_info()}")
 
         with st.form("form_edit_produk", clear_on_submit=False):
-            nama_edit = st.text_input("Nama Produk *", value=produk.nama)
+            nama_edit = st.text_input("Nama Produk *", value=produk.get_nama())
+            # Peringatan error tepat di bawah textbox Nama Produk
+            err_nama_edit = st.empty()
 
             # Pilihan Kategori
             opsi_kat = {"-- Tanpa Kategori --": None}
             idx_pilih = 0
             for i, k in enumerate(daftar_kategori, start=1):
-                opsi_kat[f"📁 {k.nama}"] = k.id
-                if produk.kategori_id == k.id:
+                opsi_kat[f"📁 {k.get_nama()}"] = k.id
+                if produk.get_kategori_id() == k.id:
                     idx_pilih = i
 
             kat_terpilih = st.selectbox(
@@ -150,6 +182,7 @@ def tampilkan_halaman_produk(controller):
                 index=idx_pilih,
             )
             kategori_id_edit = opsi_kat[kat_terpilih]
+            err_kategori_edit = st.empty()
 
             col_h, col_s = st.columns(2)
             with col_h:
@@ -157,16 +190,21 @@ def tampilkan_halaman_produk(controller):
                     "Harga Satuan (Rp) *",
                     min_value=0.0,
                     step=1000.0,
-                    value=float(produk.harga),
+                    value=float(produk.get_harga()),
                     format="%.2f",
                 )
+                # Peringatan error tepat di bawah textbox/input Harga
+                err_harga_edit = st.empty()
+
             with col_s:
                 stok_edit = st.number_input(
                     "Jumlah Stok *",
                     min_value=0,
                     step=1,
-                    value=int(produk.stok),
+                    value=int(produk.get_stok()),
                 )
+                # Peringatan error tepat di bawah textbox/input Stok
+                err_stok_edit = st.empty()
 
             st.write("")
             col_sub, _ = st.columns([1, 4])
@@ -174,25 +212,46 @@ def tampilkan_halaman_produk(controller):
                 submitted_edit = st.form_submit_button("💾 Simpan Perubahan", type="primary")
 
             if submitted_edit:
-                try:
-                    controller.ubah_produk(
-                        produk_id=produk.id,
-                        nama=nama_edit,
-                        harga=harga_edit,
-                        stok=stok_edit,
-                        kategori_id=kategori_id_edit,
-                    )
-                    st.session_state["flash_message"] = {
-                        "type": "success",
-                        "text": f"Data produk '{nama_edit}' berhasil diperbarui!",
-                    }
-                    st.session_state["produk_mode"] = "daftar"
-                    st.session_state["produk_edit_id"] = None
-                    st.rerun()
-                except ValueError as err:
-                    st.error(f"❌ {str(err)}")
-                except Exception as err:
-                    st.error(f"❌ Terjadi kesalahan: {str(err)}")
+                ada_error = False
+
+                # 1. Validasi Nama Produk
+                if not nama_edit or len(nama_edit.strip()) < 2:
+                    err_nama_edit.error("⚠️ Data input salah: Nama produk wajib diisi (minimal 2 karakter).")
+                    ada_error = True
+                elif len(nama_edit.strip()) > 150:
+                    err_nama_edit.error("⚠️ Data input salah: Nama produk maksimal 150 karakter.")
+                    ada_error = True
+
+                # 2. Validasi Harga Produk
+                if harga_edit is None or harga_edit < 0:
+                    err_harga_edit.error("⚠️ Data input salah: Harga tidak boleh bernilai negatif (minimal Rp 0).")
+                    ada_error = True
+
+                # 3. Validasi Stok Produk
+                if stok_edit is None or stok_edit < 0:
+                    err_stok_edit.error("⚠️ Data input salah: Jumlah stok tidak boleh negatif (minimal 0).")
+                    ada_error = True
+
+                if not ada_error:
+                    try:
+                        controller.ubah_produk(
+                            produk_id=produk.id,
+                            nama=nama_edit,
+                            harga=harga_edit,
+                            stok=stok_edit,
+                            kategori_id=kategori_id_edit,
+                        )
+                        st.session_state["flash_message"] = {
+                            "type": "success",
+                            "text": f"Data produk '{nama_edit}' berhasil diperbarui!",
+                        }
+                        st.session_state["produk_mode"] = "daftar"
+                        st.session_state["produk_edit_id"] = None
+                        st.rerun()
+                    except ValueError as err:
+                        err_nama_edit.error(f"⚠️ Data input tidak sesuai: {str(err)}")
+                    except Exception as err:
+                        st.error(f"❌ Terjadi kesalahan: {str(err)}")
 
     # ==============================================================
     # 3. HALAMAN UTAMA: DAFTAR PRODUK (DEFAULT)
@@ -210,10 +269,10 @@ def tampilkan_halaman_produk(controller):
         if semua_produk:
             m1, m2, m3 = st.columns(3)
             m1.metric("Total Jenis Produk", f"{len(semua_produk)} jenis")
-            m2.metric("Total Seluruh Stok", f"{sum(p.stok for p in semua_produk):,} unit")
+            m2.metric("Total Seluruh Stok", f"{sum(p.get_stok() for p in semua_produk):,} unit")
             m3.metric(
                 "Estimasi Total Nilai",
-                f"Rp {sum(p.harga * p.stok for p in semua_produk):,.2f}",
+                f"Rp {sum(p.get_harga() * p.get_stok() for p in semua_produk):,.2f}",
             )
             st.write("")
 
@@ -226,7 +285,7 @@ def tampilkan_halaman_produk(controller):
                 key="cari_produk_input",
             )
         with col_kat_filter:
-            opsi_filter = ["Semua Kategori"] + [k.nama for k in daftar_kategori]
+            opsi_filter = ["Semua Kategori"] + [k.get_nama() for k in daftar_kategori]
             filter_kat = st.selectbox("Filter Kategori:", options=opsi_filter)
         with col_tambah:
             if st.button("➕ Tambah Data", type="primary", use_container_width=True):
@@ -236,10 +295,10 @@ def tampilkan_halaman_produk(controller):
         # Filter produk
         produk_tampil = semua_produk
         if cari:
-            produk_tampil = [p for p in produk_tampil if cari.lower() in p.nama.lower()]
+            produk_tampil = [p for p in produk_tampil if cari.lower() in p.get_nama().lower()]
         if filter_kat != "Semua Kategori":
             produk_tampil = [
-                p for p in produk_tampil if p.kategori and p.kategori.nama == filter_kat
+                p for p in produk_tampil if p.kategori and p.kategori.get_nama() == filter_kat
             ]
 
         st.write("")
@@ -272,11 +331,11 @@ def tampilkan_halaman_produk(controller):
                     [0.7, 2.5, 1.8, 1.6, 1.0, 1.6, 1.8], vertical_alignment="center"
                 )
                 c_id.write(f"#{p.id}")
-                c_nm.markdown(f"**{p.nama}**")
-                c_kt.write(p.kategori.nama if p.kategori else "-")
-                c_hg.write(f"Rp {p.harga:,.2f}")
-                c_st.write(f"{p.stok:,}")
-                c_tot.write(f"Rp {p.harga * p.stok:,.2f}")
+                c_nm.markdown(f"**{p.get_nama()}**")
+                c_kt.write(p.kategori.get_nama() if p.kategori else "-")
+                c_hg.write(f"Rp {p.get_harga():,.2f}")
+                c_st.write(f"{p.get_stok():,}")
+                c_tot.write(f"Rp {p.get_harga() * p.get_stok():,.2f}")
 
                 with c_act:
                     b_edit, b_del = st.columns(2)
@@ -287,7 +346,7 @@ def tampilkan_halaman_produk(controller):
                             st.rerun()
                     with b_del:
                         if st.button("🗑️ Hapus", key=f"btn_del_{p.id}", type="secondary", use_container_width=True):
-                            konfirmasi_hapus_dialog(p.id, p.nama, controller)
+                            konfirmasi_hapus_dialog(p.id, p.get_nama(), controller)
 
                 st.markdown(
                     "<hr style='margin: 0.25rem 0; border: none; border-top: 1px solid #f1f3f5;'>",
