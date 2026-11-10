@@ -9,10 +9,13 @@ Aplikasi berbasis Python dengan pola **Model-View-Controller (MVC)** yang disesu
 Aplikasi mengimplementasikan 5 entitas utama beserta atribut, method, dan relasinya:
 
 ```mermaid
+
 classDiagram
     class Produk {
         - nama: str
         - harga: float
+        - stok: int
+        - kategori_id: int
         + get_info(): str
     }
 
@@ -25,12 +28,14 @@ classDiagram
     class Pelanggan {
         - nama: str
         + lihat_produk(): list
+        + buat_pesanan(): Pesanan
     }
 
     class Pesanan {
         - nomor: str
         - detail: list
         + tambah_produk(produk, jumlah): DetailPesanan
+        + hitung_total(): float
     }
 
     class DetailPesanan {
@@ -39,10 +44,11 @@ classDiagram
         + get_total(): float
     }
 
-    Kategori o-- Produk : Aggregation
-    Pelanggan -- Produk : Association
-    Pesanan *-- DetailPesanan : Composition
-    DetailPesanan --> Produk : Refers
+    Kategori "1" o-- "0..*" Produk : memiliki
+    Pelanggan "1" -- "0..*" Pesanan : membuat
+    Pesanan "1" *-- "1..*" DetailPesanan : terdiri dari
+    DetailPesanan "*" --> "1" Produk : mengacu pada
+
 ```
 
 ### Rincian Entitas:
