@@ -3,6 +3,15 @@ import streamlit as st
 from controllers.pelanggan_controller import PelangganController
 
 
+def _val(obj, attr, default=None):
+    if hasattr(obj, f"get_{attr}") and callable(getattr(obj, f"get_{attr}")):
+        try:
+            return getattr(obj, f"get_{attr}")()
+        except Exception:
+            pass
+    return getattr(obj, attr, default)
+
+
 def tampilkan_halaman_pelanggan(controller: PelangganController):
     st.title("👥 Manajemen Pelanggan")
     st.caption(
@@ -20,8 +29,8 @@ def tampilkan_halaman_pelanggan(controller: PelangganController):
             data = [
                 {
                     "ID": pel.id,
-                    "Nama Pelanggan": pel.get_nama(),
-                    "Jumlah Riwayat Pesanan": len(pel.get_pesanan_list()),
+                    "Nama Pelanggan": _val(pel, "nama", ""),
+                    "Jumlah Riwayat Pesanan": len(_val(pel, "pesanan_list", [])),
                 }
                 for pel in semua_pelanggan
             ]

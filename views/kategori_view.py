@@ -3,6 +3,15 @@ import streamlit as st
 from controllers.kategori_controller import KategoriController
 
 
+def _val(obj, attr, default=None):
+    if hasattr(obj, f"get_{attr}") and callable(getattr(obj, f"get_{attr}")):
+        try:
+            return getattr(obj, f"get_{attr}")()
+        except Exception:
+            pass
+    return getattr(obj, attr, default)
+
+
 def tampilkan_halaman_kategori(controller: KategoriController):
     st.title("🗂️ Manajemen Kategori")
     st.caption(
@@ -19,17 +28,17 @@ def tampilkan_halaman_kategori(controller: KategoriController):
         if semua_kat:
             data = []
             for k in semua_kat:
-                prods = k.get_daftar_produk()
+                prods = _val(k, "daftar_produk", [])
                 jml_produk = len(prods)
                 daftar_nama_produk = (
-                    ", ".join([p.get_nama() for p in prods])
+                    ", ".join([_val(p, "nama", "") for p in prods])
                     if jml_produk > 0
                     else "(Belum ada produk)"
                 )
                 data.append(
                     {
                         "ID": k.id,
-                        "Nama Kategori": k.get_nama(),
+                        "Nama Kategori": _val(k, "nama", ""),
                         "Jumlah Produk": f"{jml_produk} produk",
                         "Daftar Produk (daftar_produk)": daftar_nama_produk,
                     }
@@ -39,7 +48,7 @@ def tampilkan_halaman_kategori(controller: KategoriController):
 
             st.write("---")
             st.subheader("🗑️ Hapus Kategori")
-            opsi_kat = {f"#{k.id} - {k.get_nama()}": k.id for k in semua_kat}
+            opsi_kat = {f"#{k.id} - {_val(k, 'nama', '')}": k.id for k in semua_kat}
             terpilih = st.selectbox("Pilih kategori yang ingin dihapus:", options=list(opsi_kat.keys()))
             if st.button("Hapus Kategori", type="secondary"):
                 try:
@@ -57,7 +66,6 @@ def tampilkan_halaman_kategori(controller: KategoriController):
             nama_baru = st.text_input("Nama Kategori *", placeholder="Contoh: Elektronik, Pakaian, Makanan...")
             # Peringatan error tepat di bawah textbox
             err_nama = st.empty()
-
             submit = st.form_submit_button("Simpan Kategori", type="primary")
 
             if submit:
@@ -72,6 +80,6 @@ def tampilkan_halaman_kategori(controller: KategoriController):
                         st.success(f"Kategori '{nama_clean}' berhasil ditambahkan!")
                         st.rerun()
                     except ValueError as err:
-                        err_nama.error(f"⚠️ Data input tidak sesuai: {str(err)}")
+                        err_nama.error(f"⚠️ Data input tidak sesuai: {err}")
                     except Exception as err:
-                        st.error(f"Gagal menambahkan kategori: {err}")
+                        st.error(f"Gagal: {err}")

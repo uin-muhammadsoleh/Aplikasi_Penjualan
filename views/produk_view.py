@@ -1,6 +1,46 @@
 import streamlit as st
 
 
+def _val_stok(p) -> int:
+    """Mengambil stok produk dengan aman (mendukung atribut stok maupun method get_stok)."""
+    if hasattr(p, "get_stok") and callable(getattr(p, "get_stok")):
+        try:
+            return int(p.get_stok())
+        except Exception:
+            pass
+    return int(getattr(p, "stok", 0) or 0)
+
+
+def _val_harga(p) -> float:
+    """Mengambil harga produk dengan aman (mendukung atribut harga maupun method get_harga)."""
+    if hasattr(p, "get_harga") and callable(getattr(p, "get_harga")):
+        try:
+            return float(p.get_harga())
+        except Exception:
+            pass
+    return float(getattr(p, "harga", 0.0) or 0.0)
+
+
+def _val_nama(obj) -> str:
+    """Mengambil nama entitas dengan aman (mendukung atribut nama maupun method get_nama)."""
+    if hasattr(obj, "get_nama") and callable(getattr(obj, "get_nama")):
+        try:
+            return str(obj.get_nama())
+        except Exception:
+            pass
+    return str(getattr(obj, "nama", "") or "")
+
+
+def _val_kat_id(p) -> int | None:
+    """Mengambil ID kategori produk dengan aman."""
+    if hasattr(p, "get_kategori_id") and callable(getattr(p, "get_kategori_id")):
+        try:
+            return p.get_kategori_id()
+        except Exception:
+            pass
+    return getattr(p, "kategori_id", None)
+
+
 @st.dialog("Konfirmasi Hapus Produk")
 def konfirmasi_hapus_dialog(produk_id: int, nama_produk: str, controller):
     """Pop-up modal untuk mengonfirmasi penghapusan produk."""
@@ -27,7 +67,7 @@ def konfirmasi_hapus_dialog(produk_id: int, nama_produk: str, controller):
 
 def tampilkan_halaman_produk(controller):
     """Menampilkan antarmuka manajemen produk dengan validasi input,
-    peringatan di bawah masing-masing textbox, serta integrasi getter/setter.
+    peringatan di bawah masing-masing textbox, serta integrasi getter/setter yang aman.
     """
     if "produk_mode" not in st.session_state:
         st.session_state["produk_mode"] = "daftar"
@@ -65,7 +105,7 @@ def tampilkan_halaman_produk(controller):
             # Pilihan Kategori (Relasi Aggregation)
             opsi_kat = {"-- Tanpa Kategori --": None}
             for k in daftar_kategori:
-                opsi_kat[f"📁 {k.get_nama()}"] = k.id
+                opsi_kat[f"📁 {_val_nama(k)}"] = k.id
 
             kat_terpilih = st.selectbox(
                 "Kategori Produk",
@@ -113,7 +153,7 @@ def tampilkan_halaman_produk(controller):
 
                 # 2. Validasi Harga Produk
                 if harga_produk is None or harga_produk < 0:
-                    err_harga.error("⚠️ Data input salah: Harga satuan tidak boleh negatif (minimal Rp 0).")
+                    err_harga.error("⚠️ Data input salah: Harga tidak boleh bernilai negatif (minimal Rp 0).")
                     ada_error = True
 
                 # 3. Validasi Stok Produk
@@ -121,7 +161,7 @@ def tampilkan_halaman_produk(controller):
                     err_stok.error("⚠️ Data input salah: Jumlah stok tidak boleh negatif (minimal 0).")
                     ada_error = True
 
-                # Jika validasi lolos, simpan melalui Controller (yang memanggil Setter Model)
+                # Jika seluruh validasi lolos, teruskan ke Controller
                 if not ada_error:
                     try:
                         controller.tambah_produk(
@@ -139,7 +179,7 @@ def tampilkan_halaman_produk(controller):
                     except ValueError as err:
                         err_nama.error(f"⚠️ Data input tidak sesuai: {str(err)}")
                     except Exception as err:
-                        st.error(f"❌ Terjadi kesalahan saat menyimpan: {str(err)}")
+                        st.error(f"❌ Terjadi kesalahan: {str(err)}")
 
     # ==============================================================
     # 2. HALAMAN EDIT PRODUK
@@ -160,20 +200,23 @@ def tampilkan_halaman_produk(controller):
                 st.rerun()
             return
 
-        st.title(f"✏️ Edit Data Produk: {produk.get_nama()}")
-        st.info(f"ℹ️ **Informasi Produk (`get_info()`):** {produk.get_info()}")
+        nama_prod_ini = _val_nama(produk)
+        st.title(f"✏️ Edit Data Produk: {nama_prod_ini}")
+        if hasattr(produk, "get_info") and callable(getattr(produk, "get_info")):
+            st.info(f"ℹ️ **Informasi Produk (`get_info()`):** {produk.get_info()}")
 
         with st.form("form_edit_produk", clear_on_submit=False):
-            nama_edit = st.text_input("Nama Produk *", value=produk.get_nama())
+            nama_edit = st.text_input("Nama Produk *", value=nama_prod_ini)
             # Peringatan error tepat di bawah textbox Nama Produk
             err_nama_edit = st.empty()
 
             # Pilihan Kategori
             opsi_kat = {"-- Tanpa Kategori --": None}
             idx_pilih = 0
+            cur_kat_id = _val_kat_id(produk)
             for i, k in enumerate(daftar_kategori, start=1):
-                opsi_kat[f"📁 {k.get_nama()}"] = k.id
-                if produk.get_kategori_id() == k.id:
+                opsi_kat[f"📁 {_val_nama(k)}"] = k.id
+                if cur_kat_id == k.id:
                     idx_pilih = i
 
             kat_terpilih = st.selectbox(
@@ -190,7 +233,7 @@ def tampilkan_halaman_produk(controller):
                     "Harga Satuan (Rp) *",
                     min_value=0.0,
                     step=1000.0,
-                    value=float(produk.get_harga()),
+                    value=float(_val_harga(produk)),
                     format="%.2f",
                 )
                 # Peringatan error tepat di bawah textbox/input Harga
@@ -201,7 +244,7 @@ def tampilkan_halaman_produk(controller):
                     "Jumlah Stok *",
                     min_value=0,
                     step=1,
-                    value=int(produk.get_stok()),
+                    value=int(_val_stok(produk)),
                 )
                 # Peringatan error tepat di bawah textbox/input Stok
                 err_stok_edit = st.empty()
@@ -269,10 +312,10 @@ def tampilkan_halaman_produk(controller):
         if semua_produk:
             m1, m2, m3 = st.columns(3)
             m1.metric("Total Jenis Produk", f"{len(semua_produk)} jenis")
-            m2.metric("Total Seluruh Stok", f"{sum(p.get_stok() for p in semua_produk):,} unit")
+            m2.metric("Total Seluruh Stok", f"{sum(_val_stok(p) for p in semua_produk):,} unit")
             m3.metric(
                 "Estimasi Total Nilai",
-                f"Rp {sum(p.get_harga() * p.get_stok() for p in semua_produk):,.2f}",
+                f"Rp {sum(_val_harga(p) * _val_stok(p) for p in semua_produk):,.2f}",
             )
             st.write("")
 
@@ -285,7 +328,7 @@ def tampilkan_halaman_produk(controller):
                 key="cari_produk_input",
             )
         with col_kat_filter:
-            opsi_filter = ["Semua Kategori"] + [k.get_nama() for k in daftar_kategori]
+            opsi_filter = ["Semua Kategori"] + [_val_nama(k) for k in daftar_kategori]
             filter_kat = st.selectbox("Filter Kategori:", options=opsi_filter)
         with col_tambah:
             if st.button("➕ Tambah Data", type="primary", use_container_width=True):
@@ -295,10 +338,10 @@ def tampilkan_halaman_produk(controller):
         # Filter produk
         produk_tampil = semua_produk
         if cari:
-            produk_tampil = [p for p in produk_tampil if cari.lower() in p.get_nama().lower()]
+            produk_tampil = [p for p in produk_tampil if cari.lower() in _val_nama(p).lower()]
         if filter_kat != "Semua Kategori":
             produk_tampil = [
-                p for p in produk_tampil if p.kategori and p.kategori.get_nama() == filter_kat
+                p for p in produk_tampil if p.kategori and _val_nama(p.kategori) == filter_kat
             ]
 
         st.write("")
@@ -331,11 +374,11 @@ def tampilkan_halaman_produk(controller):
                     [0.7, 2.5, 1.8, 1.6, 1.0, 1.6, 1.8], vertical_alignment="center"
                 )
                 c_id.write(f"#{p.id}")
-                c_nm.markdown(f"**{p.get_nama()}**")
-                c_kt.write(p.kategori.get_nama() if p.kategori else "-")
-                c_hg.write(f"Rp {p.get_harga():,.2f}")
-                c_st.write(f"{p.get_stok():,}")
-                c_tot.write(f"Rp {p.get_harga() * p.get_stok():,.2f}")
+                c_nm.markdown(f"**{_val_nama(p)}**")
+                c_kt.write(_val_nama(p.kategori) if p.kategori else "-")
+                c_hg.write(f"Rp {_val_harga(p):,.2f}")
+                c_st.write(f"{_val_stok(p):,}")
+                c_tot.write(f"Rp {_val_harga(p) * _val_stok(p):,.2f}")
 
                 with c_act:
                     b_edit, b_del = st.columns(2)
@@ -346,7 +389,7 @@ def tampilkan_halaman_produk(controller):
                             st.rerun()
                     with b_del:
                         if st.button("🗑️ Hapus", key=f"btn_del_{p.id}", type="secondary", use_container_width=True):
-                            konfirmasi_hapus_dialog(p.id, p.get_nama(), controller)
+                            konfirmasi_hapus_dialog(p.id, _val_nama(p), controller)
 
                 st.markdown(
                     "<hr style='margin: 0.25rem 0; border: none; border-top: 1px solid #f1f3f5;'>",

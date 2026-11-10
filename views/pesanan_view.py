@@ -5,6 +5,16 @@ from controllers.pesanan_controller import PesananController
 from controllers.produk_controller import ProdukController
 
 
+def _val(obj, attr, default=None):
+    """Mengambil nilai atribut atau hasil getter method secara aman."""
+    if hasattr(obj, f"get_{attr}") and callable(getattr(obj, f"get_{attr}")):
+        try:
+            return getattr(obj, f"get_{attr}")()
+        except Exception:
+            pass
+    return getattr(obj, attr, default)
+
+
 def tampilkan_halaman_pesanan(
     pesanan_ctrl: PesananController,
     produk_ctrl: ProdukController,
@@ -24,23 +34,33 @@ def tampilkan_halaman_pesanan(
         st.subheader("Daftar Transaksi Pesanan")
         if semua_pesanan:
             for pes in semua_pesanan:
-                pel_nama = pes.pelanggan.get_nama() if pes.pelanggan else "Umum"
+                pel_nama = _val(pes.pelanggan, "nama", "Umum") if pes.pelanggan else "Umum"
+                nomor_pes = _val(pes, "nomor", "-")
+                tgl_pes = _val(pes, "tanggal")
+                tgl_str = tgl_pes.strftime("%Y-%m-%d %H:%M:%S") if tgl_pes else "-"
+
                 with st.expander(
-                    f"📦 No. Pesanan: **{pes.get_nomor()}** | Pelanggan: **{pel_nama}** | Total: **Rp {pes.get_total_pesanan():,.2f}**"
+                    f"📦 No. Pesanan: **{nomor_pes}** | Pelanggan: **{pel_nama}** | Total: **Rp {pes.get_total_pesanan():,.2f}**"
                 ):
-                    st.caption(f"Waktu Transaksi: {pes.get_tanggal().strftime('%Y-%m-%d %H:%M:%S')}")
+                    st.caption(f"Waktu Transaksi: {tgl_str}")
                     st.write("#### Rincian Item (Composition: `DetailPesanan`):")
 
                     data_detail = []
-                    for idx, d in enumerate(pes.get_detail(), start=1):
-                        prod = d.get_produk()
+                    detail_items = _val(pes, "detail", [])
+                    for idx, d in enumerate(detail_items, start=1):
+                        prod = _val(d, "produk")
+                        prod_nama = _val(prod, "nama", "-") if prod else "-"
+                        prod_harga = _val(prod, "harga", 0.0) if prod else 0.0
+                        jml = _val(d, "jumlah", 0)
+                        subtot = d.get_total() if hasattr(d, "get_total") else prod_harga * jml
+
                         data_detail.append(
                             {
                                 "No": idx,
-                                "Nama Produk": prod.get_nama() if prod else "-",
-                                "Harga Satuan": f"Rp {prod.get_harga():,.2f}" if prod else "-",
-                                "Jumlah (Qty)": d.get_jumlah(),
-                                "Subtotal (`get_total()`)": f"Rp {d.get_total():,.2f}",
+                                "Nama Produk": prod_nama,
+                                "Harga Satuan": f"Rp {prod_harga:,.2f}" if prod else "-",
+                                "Jumlah (Qty)": jml,
+                                "Subtotal (`get_total()`)": f"Rp {subtot:,.2f}",
                             }
                         )
 
@@ -67,7 +87,7 @@ def tampilkan_halaman_pesanan(
         # Peringatan error tepat di bawah textbox Nomor Pesanan
         err_nomor = st.empty()
 
-        opsi_pel = {f"#{p.id} - {p.get_nama()}": p.id for p in semua_pelanggan}
+        opsi_pel = {f"#{p.id} - {_val(p, 'nama')}": p.id for p in semua_pelanggan}
         pel_terpilih = st.selectbox(
             "Pilih Pelanggan *",
             options=list(opsi_pel.keys()) if opsi_pel else ["(Tidak ada pelanggan)"],
@@ -83,9 +103,9 @@ def tampilkan_halaman_pesanan(
             st.session_state["cart_items"] = []
 
         opsi_prod = {
-            f"{p.get_nama()} (Stok: {p.get_stok()}, Rp {p.get_harga():,.0f})": p
+            f"{_val(p, 'nama')} (Stok: {_val(p, 'stok', 0)}, Rp {_val(p, 'harga', 0):,.0f})": p
             for p in semua_produk
-            if p.get_stok() > 0
+            if _val(p, "stok", 0) > 0
         }
 
         if opsi_prod:
@@ -106,12 +126,16 @@ def tampilkan_halaman_pesanan(
             # Peringatan error tepat di bawah input Jumlah / Pilihan Produk
             err_qty = st.empty()
 
+            stok_tersedia = _val(prod_obj, "stok", 0)
+            harga_prod = _val(prod_obj, "harga", 0.0)
+            nama_prod = _val(prod_obj, "nama", "")
+
             if btn_tambah_item:
                 if qty <= 0:
                     err_qty.error("⚠️ Data input salah: Jumlah pembelian minimal 1 item.")
-                elif qty > prod_obj.get_stok():
+                elif qty > stok_tersedia:
                     err_qty.error(
-                        f"⚠️ Data input salah: Jumlah ({qty}) melebihi stok yang tersedia ({prod_obj.get_stok()} unit)."
+                        f"⚠️ Data input salah: Jumlah ({qty}) melebihi stok yang tersedia ({stok_tersedia} unit)."
                     )
                 else:
                     # Cek apakah item sudah ada di cart
@@ -119,14 +143,14 @@ def tampilkan_halaman_pesanan(
                     for item in st.session_state["cart_items"]:
                         if item["produk_id"] == prod_obj.id:
                             total_qty = item["jumlah"] + qty
-                            if total_qty > prod_obj.get_stok():
+                            if total_qty > stok_tersedia:
                                 err_qty.error(
-                                    f"⚠️ Data input salah: Total jumlah di keranjang ({total_qty}) melebihi stok ({prod_obj.get_stok()})."
+                                    f"⚠️ Data input salah: Total jumlah di keranjang ({total_qty}) melebihi stok ({stok_tersedia})."
                                 )
                                 ada_di_cart = True
                                 break
                             item["jumlah"] = total_qty
-                            item["subtotal"] = prod_obj.get_harga() * total_qty
+                            item["subtotal"] = harga_prod * total_qty
                             ada_di_cart = True
                             st.rerun()
 
@@ -134,10 +158,10 @@ def tampilkan_halaman_pesanan(
                         st.session_state["cart_items"].append(
                             {
                                 "produk_id": prod_obj.id,
-                                "nama": prod_obj.get_nama(),
-                                "harga": prod_obj.get_harga(),
+                                "nama": nama_prod,
+                                "harga": harga_prod,
                                 "jumlah": qty,
-                                "subtotal": prod_obj.get_harga() * qty,
+                                "subtotal": harga_prod * qty,
                             }
                         )
                         st.rerun()
